@@ -70,18 +70,22 @@ class MongoDBCache(BaseCache):
         data = coll.find_one({'_id': key})
         if data and (mode == 'set' or
                 (mode == 'add' and data['expires'] > now)):
-            coll.update({'_id': data['_id']}, {'$set': {'expires': expires}}, safe=True)
-        else:
-            if document_size <= MAX_SIZE:
-                coll.insert({'_id': key, 'data': encoded, 'expires': expires}, safe=True)
+            raw = data.get('data')
+            if raw and raw == encoded:
+                coll.update({'_id': data['_id']}, {'$set': {'expires': expires}}, safe=True)
+                return
             else:
-                chunks = []
-                for i in xrange(0, document_size, MAX_SIZE):
-                    chunk = encoded[i:i+MAX_SIZE]
-                    aux_key = self.make_key(chunk)
-                    coll.insert({'_id': aux_key, 'data': chunk}, safe=True)
-                    chunks.append(aux_key)
-                coll.insert({'_id': key, 'chunks': chunks, 'expires': expires}, safe=True)
+                self._delete([key] + data.get('chunks', []))
+        if document_size <= MAX_SIZE:
+            coll.insert({'_id': key, 'data': encoded, 'expires': expires}, safe=True)
+        else:
+            chunks = []
+            for i in xrange(0, document_size, MAX_SIZE):
+                chunk = encoded[i:i+MAX_SIZE]
+                aux_key = self.make_key(chunk)
+                coll.insert({'_id': aux_key, 'data': chunk}, safe=True)
+                chunks.append(aux_key)
+            coll.insert({'_id': key, 'chunks': chunks, 'expires': expires}, safe=True)
 
 #-----------------------------------------------------------------------------------------------------------------------
 
@@ -106,15 +110,15 @@ class MongoDBCache(BaseCache):
         if data['expires'] < now:
             coll.remove(data['_id'])
             return default
-        if data.get('data', None):
-            raw = data['data']
-        elif data.get('chunks', None):
-            raw = ''
+        raw = data.get('data')
+        if not raw:
             chunks = data.get('chunks')
-            for chunk in chunks:
-                raw += coll.find_one({'_id': chunk})['data']
-        else:
-            return default
+            if chunks:
+                raw = ''
+                for chunk in chunks:
+                    raw += coll.find_one({'_id': chunk})['data']
+            else:
+                return default
         return self._decode(raw)
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -133,14 +137,14 @@ class MongoDBCache(BaseCache):
         for result in data:
             if result['expires'] < now:
                 to_remove.append(result['_id'])
-            elif result.get('data', None):
-                raw = result['data']
-            elif result.get('chunks', None):
-                raw = ''
+            else:
+                raw = result.get('data')
                 chunks = result.get('chunks')
-                for chunk in chunks:
-                    raw += coll.find_one({'_id': chunk})['data']
-            out[parsed_keys[result['_id']]] = self._decode(raw)
+                if chunks:
+                    raw = ''
+                    for chunk in chunks:
+                        raw += coll.find_one({'_id': chunk})['data']
+                out[parsed_keys[result['_id']]] = self._decode(raw)
         if to_remove:
             coll.remove({'_id': {'$in': to_remove}})
         return out
@@ -151,7 +155,15 @@ class MongoDBCache(BaseCache):
         key = self.make_key(key, version)
         self.validate_key(key)
         coll = self._get_collection()
-        coll.remove({'_id': key})
+        data = coll.find_one({'_id': key})
+        if data:
+            self._delete([key] + data.get('chunks', []))
+
+#-------------------------------------------------------------------------------------------------------------
+
+    def _delete(self, ids_to_remove):
+        coll = self._get_collection()
+        coll.remove({'_id': {'$in':ids_to_remove}})
 
 #-----------------------------------------------------------------------------------------------------------------------
 
@@ -166,7 +178,7 @@ class MongoDBCache(BaseCache):
 
     def clear(self):
         coll = self._get_collection()
-        coll.remove(None)
+        coll.remove({})
 
 #-----------------------------------------------------------------------------------------------------------------------
 

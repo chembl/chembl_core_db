@@ -13,11 +13,11 @@ except ImportError:
     from setuptools import setup
 
 if sys.version_info < (2, 7, 3) or sys.version_info >= (3, 0, 0):
-    raise Exception('ChEMBL software stack requires python 2.7.3 - 2.7.7')
+    raise Exception('ChEMBL software stack requires python 2.7.3 - 3.0.0')
 
 setup(
     name='chembl_core_db',
-    version='0.5.8',
+    version='0.5.9',
     author='Michal Nowotka',
     author_email='mnowotka@ebi.ac.uk',
     description='Core ChEMBL python library',
