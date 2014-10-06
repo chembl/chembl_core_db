@@ -17,7 +17,7 @@ if sys.version_info < (2, 7, 3) or sys.version_info >= (3, 0, 0):
 
 setup(
     name='chembl_core_db',
-    version='0.5.9',
+    version='0.5.10',
     author='Michal Nowotka',
     author_email='mnowotka@ebi.ac.uk',
     description='Core ChEMBL python library',
@@ -29,7 +29,6 @@ setup(
               'chembl_core_db.db',
               'chembl_core_db.db.backends',
               'chembl_core_db.db.backends.oracleChEmbl',
-              'chembl_core_db.db.backends.oraclePoolChEmbl',
               'chembl_core_db.db.models',
               'chembl_core_db.testing'],
     long_description=open('README.rst').read(),
@@ -39,7 +38,7 @@ setup(
                  'Environment :: Web Environment',
                  'Framework :: Django',
                  'Intended Audience :: Developers',
-                 'License :: Creative Commons :: Attribution-ShareAlike 3.0 Unported',
+                 'License :: OSI Approved :: MIT License',
                  'Operating System :: POSIX :: Linux',
                  'Programming Language :: Python :: 2.7',
                  'Topic :: Scientific/Engineering :: Chemistry'],
