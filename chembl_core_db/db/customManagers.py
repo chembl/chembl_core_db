@@ -71,6 +71,7 @@ class CompoundMolsQuerySet(QuerySet,CompoundMolsMixin):
 #-----------------------------------------------------------------------------------------------------------------------
 
 class CompoundMolsManager(models.Manager, CompoundMolsMixin):
+    use_for_related_fields = True
     def get_query_set(self):
         return CompoundMolsQuerySet(self.model, using=self._db)
 

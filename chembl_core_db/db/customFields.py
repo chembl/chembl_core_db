@@ -300,6 +300,8 @@ class ChemblNullableBooleanField(models.NullBooleanField):
         kwargs['null'] = True
         kwargs['blank'] = True
         Field.__init__(self, *args, **kwargs)
+        if self.default != NOT_PROVIDED:
+            self.blank = False # blank is false because it has default value
 
     def get_db_prep_value(self, value, connection=None, prepared=False):
         if connection.vendor == 'postgresql':
