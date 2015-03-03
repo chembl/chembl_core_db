@@ -1,6 +1,14 @@
 chembl_core_db
 ======
 
+.. image:: https://pypip.in/v/chembl_core_db/badge.png
+    :target: https://crate.io/packages/chembl_core_db/
+    :alt: Latest PyPI version
+
+.. image:: https://pypip.in/d/chembl_core_db/badge.png
+    :target: https://crate.io/packages/chembl_core_db/
+    :alt: Number of PyPI downloads
+
 This is chembl_core_db package developed at Chembl group, EMBL-EBI, Cambridge, UK.
 
 It's a core library providing custom fields intended to use with ChEMBL database, such as BlobField (for storing binary data - not supported by django until 1.6), or ChemblIntegerField, which create database constraint for default value (not supported by standard django IntegerField).
