@@ -173,8 +173,11 @@ class ChemblDateField(models.DateField):
 class ChemblNoLimitDecimalField(models.DecimalField):
 
     def __init__(self, verbose_name=None, name=None,  **kwargs):
-        super(ChemblNoLimitDecimalField, self).__init__(verbose_name=verbose_name, name=name, max_digits=38,
-            decimal_places=19, **kwargs)
+        if not kwargs.get("max_digits", False):
+            kwargs["max_digits"] = 38
+        if not kwargs.get("decimal_places", False):
+            kwargs["decimal_places"] = 19
+        super(ChemblNoLimitDecimalField, self).__init__(verbose_name=verbose_name, name=name, **kwargs)
 
     def db_type(self, connection):
         if connection.vendor == 'oracle':
@@ -217,8 +220,8 @@ class ChemblIntegerField(models.IntegerField):
     def get_internal_type(self):
         return "ChemblIntegerField"
 
-    def __init__(self, length, *args, **kwargs):
-        self.length = length
+    def __init__(self, *args, **kwargs):
+        self.length = kwargs.pop("length",9)
         super(ChemblIntegerField, self).__init__(*args, **kwargs)
 
     def db_type(self, connection):
@@ -300,8 +303,6 @@ class ChemblNullableBooleanField(models.NullBooleanField):
         kwargs['null'] = True
         kwargs['blank'] = True
         Field.__init__(self, *args, **kwargs)
-        if self.default != NOT_PROVIDED:
-            self.blank = False # blank is false because it has default value
 
     def get_db_prep_value(self, value, connection=None, prepared=False):
         if connection.vendor == 'postgresql':
@@ -344,6 +345,8 @@ class ChemblNullableBooleanField(models.NullBooleanField):
 class ChemblBooleanField(models.BooleanField):
 
     def __init__(self, *args, **kwargs):
+        kwargs['blank'] = True
+
         Field.__init__(self, *args, **kwargs)
 
     def get_db_prep_value(self, value, connection=None, prepared=False):
@@ -392,8 +395,8 @@ class ChemblPositiveIntegerField(models.IntegerField):
         defaults.update(kwargs)
         return super(ChemblPositiveIntegerField, self).formfield(**defaults)
 
-    def __init__(self, length, *args, **kwargs):
-        self.length = length
+    def __init__(self, *args, **kwargs):
+        self.length = kwargs.pop("length",9)
         super(ChemblPositiveIntegerField, self).__init__(*args, **kwargs)
 
     def db_type(self, connection):
@@ -453,11 +456,11 @@ class ChemblAutoField(Field):
         'invalid': _(u"'%s' value must be an integer."),
         }
 
-    def __init__(self, length, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         assert kwargs.get('primary_key', False) is True,\
         "%ss must have primary_key=True." % self.__class__.__name__
         kwargs['blank'] = True
-        self.length = length
+        self.length = kwargs.pop("length",9)
         Field.__init__(self, *args, **kwargs)
 
     def get_internal_type(self):
