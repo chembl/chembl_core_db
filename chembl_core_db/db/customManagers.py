@@ -59,7 +59,13 @@ class CompoundMolsMixin(object):
         if connection.vendor == 'oracle':
             return self.extra(where=["(flexmatch(" + ctab_column + ",%s,'ignore=all')=1)"], params=('smiles:' + structure,))
         if connection.vendor == 'postgresql':
-            return self.extra(where=[ctab_column + "@=%s"], params=(structure,))
+            try:
+                from rdkit.rdBase import rdkitVersion
+            except Exception:
+                rdkitVersion = 0
+            if rdkitVersion != '2015.03.1':
+                return self.extra(where=[ctab_column + "@=%s"], params=(structure,))
+            return self.extra(where=[ctab_column + "@>%s" + " AND " + ctab_column + "<@%s"], params=(structure, structure))
         else:
             raise NotImplementedError
 

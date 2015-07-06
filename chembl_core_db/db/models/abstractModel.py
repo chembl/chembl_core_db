@@ -95,7 +95,7 @@ class ModifiedModelMetaclass(ChemblModelMetaClass):
 
         module = attrs['__module__']
         excludes = getattr(meta, 'exclude', ())
-        if excludes == None:
+        if excludes is None:
             excludes = ()
         remove_field(metaCls, 'exclude')
         attrs['Meta'] = metaCls

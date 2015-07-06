@@ -14,7 +14,7 @@ except ImportError:
 
 setup(
     name='chembl_core_db',
-    version='0.6.0',
+    version='0.6.1',
     author='Michal Nowotka',
     author_email='mnowotka@ebi.ac.uk',
     description='Core ChEMBL python library',
