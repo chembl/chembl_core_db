@@ -290,6 +290,10 @@ class ChemblNullBooleanField(models.IntegerField):
             type = 'int(1)'
             type += default
             return type
+        if connection.vendor == 'sqlite':
+            type = 'tinyint'
+            type += default
+            return type
         return super(ChemblNullBooleanField, self).db_type(connection)
 
 #-----------------------------------------------------------------------------------------------------------------------
