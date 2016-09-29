@@ -12,6 +12,10 @@ from datetime import datetime, timedelta
 from django.core.cache.backends.base import BaseCache
 import zlib
 import logging
+try:
+    from urllib import urlencode
+except ImportError:
+    from urllib.parse import urlencode
 
 #-----------------------------------------------------------------------------------------------------------------------
 
@@ -32,6 +36,7 @@ class MongoDBCache(BaseCache):
         self._rsname = options.get('RSNAME')
         self._user = options.get('USER', None)
         self._password = options.get('PASSWORD', None)
+        self._server_selection_timeout_ms = options.get('SERVER_SELECTION_TIMEOUT_MS', 30000)
         self._socket_timeout_ms = options.get('SOCKET_TIMEOUT_MS', None)
         self._connect_timeout_ms = options.get('CONNECT_TIMEOUT_MS', 20000)
         self.compression_level = options.get('COMPRESSION_LEVEL', 0)
@@ -57,6 +62,9 @@ class MongoDBCache(BaseCache):
 #-----------------------------------------------------------------------------------------------------------------------
 
     def _base_set(self, mode, key, value, timeout=None):
+        no_safe = False
+        if pymongo.version_tuple[0] >= 3:
+            no_safe = True
         if not timeout:
             timeout = self.default_timeout
         now = datetime.utcnow()
@@ -72,20 +80,32 @@ class MongoDBCache(BaseCache):
                 (mode == 'add' and data['expires'] > now)):
             raw = data.get('data')
             if raw and raw == encoded:
-                coll.update({'_id': data['_id']}, {'$set': {'expires': expires}}, safe=True)
+                if no_safe:
+                    coll.update({'_id': data['_id']}, {'$set': {'expires': expires}})
+                else:
+                    coll.update({'_id': data['_id']}, {'$set': {'expires': expires}}, safe=True)
                 return
             else:
                 self._delete([key] + data.get('chunks', []))
         if document_size <= MAX_SIZE:
-            coll.insert({'_id': key, 'data': encoded, 'expires': expires}, safe=True)
+            if no_safe:
+                coll.insert({'_id': key, 'data': encoded, 'expires': expires})
+            else:
+                coll.insert({'_id': key, 'data': encoded, 'expires': expires}, safe=True)
         else:
             chunks = []
             for i in xrange(0, document_size, MAX_SIZE):
                 chunk = encoded[i:i+MAX_SIZE]
                 aux_key = self.make_key(chunk)
-                coll.insert({'_id': aux_key, 'data': chunk}, safe=True)
+                if no_safe:
+                    coll.insert({'_id': aux_key, 'data': chunk})
+                else:
+                    coll.insert({'_id': aux_key, 'data': chunk}, safe=True)
                 chunks.append(aux_key)
-            coll.insert({'_id': key, 'chunks': chunks, 'expires': expires}, safe=True)
+            if no_safe:
+                coll.insert({'_id': key, 'chunks': chunks, 'expires': expires})
+            else:
+                coll.insert({'_id': key, 'chunks': chunks, 'expires': expires}, safe=True)
 
 #-----------------------------------------------------------------------------------------------------------------------
 
@@ -206,12 +226,19 @@ class MongoDBCache(BaseCache):
         except ImportError:
             pass
 
-        if self._rsname:
-            self.connection = pymongo.MongoReplicaSetClient(self._rshosts, replicaSet=self._rsname,
-                read_preference=self._read_preference, socketTimeoutMS=self._socket_timeout_ms,
-                connectTimeoutMS=self._connect_timeout_ms, tag_sets=self._tag_sets)
+        if pymongo.version_tuple[0] < 3:
+
+            if self._rsname:
+                self.connection = pymongo.MongoReplicaSetClient(self._rshosts, replicaSet=self._rsname,
+                    read_preference=self._read_preference, socketTimeoutMS=self._socket_timeout_ms,
+                    connectTimeoutMS=self._connect_timeout_ms, tag_sets=self._tag_sets)
+            else:
+                self.connection = pymongo.Connection(self._host, self._port)
+
         else:
-            self.connection = pymongo.Connection(self._host, self._port)
+            self.connection = pymongo.MongoClient(connect=False, host=self._host, replicaset=self._rsname,
+                sockettimeoutms=self._socket_timeout_ms, connecttimeoutms=self._connect_timeout_ms,
+                serverSelectionTimeoutMS=self._server_selection_timeout_ms)
 
         self._db = self.connection[self._database]
         if self._user and self._password:

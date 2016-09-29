@@ -57,7 +57,7 @@ class CompoundMolsMixin(object):
         ctab_column = self.get_column('ctab')
         connection = connections[self._db or 'default']
         if connection.vendor == 'oracle':
-            return self.extra(where=["(sss(" + ctab_column + ",%s,'ignore=all')=1)"], params=('smiles:' + structure,))
+            return self.extra(where=["(sss(" + ctab_column + ",%s)=1)"], params=('smiles:' + structure,))
         if connection.vendor == 'postgresql':
             return self.extra(where=[ctab_column + "@>%s"], params=(structure,))
         else:
