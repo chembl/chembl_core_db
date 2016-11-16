@@ -238,11 +238,16 @@ class MongoDBCache(BaseCache):
         else:
             self.connection = pymongo.MongoClient(connect=False, host=self._host, replicaset=self._rsname,
                 sockettimeoutms=self._socket_timeout_ms, connecttimeoutms=self._connect_timeout_ms,
-                serverSelectionTimeoutMS=self._server_selection_timeout_ms)
+                serverSelectionTimeoutMS=self._server_selection_timeout_ms,read_preference=self._read_preference)
 
         self._db = self.connection[self._database]
         if self._user and self._password:
             self._db.authenticate(self._user, self._password)
-        self._coll= self._db[self._collection]
+        if pymongo.version_tuple[0] < 3:
+            self._coll= self._db[self._collection]
+        else:
+            self._coll = self._db.get_collection(self._collection)
+            if not self._coll:
+                self._coll= self._db.create_collection(self._collection, storageEngine={'wiredTiger':{'configString':'block_compressor=none'}})
 
 #-----------------------------------------------------------------------------------------------------------------------
