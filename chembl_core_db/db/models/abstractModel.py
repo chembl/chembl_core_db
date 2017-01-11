@@ -34,6 +34,12 @@ class ChemblAppAbstractModel(models.Model):
 
 #-----------------------------------------------------------------------------------------------------------------------
 
+class ChemblAbstractModel(models.Model):
+    class Meta:
+        abstract = True
+
+#-----------------------------------------------------------------------------------------------------------------------
+
 class ChemblModelMetaClass(ModelBase):
     def __new__(cls, name, bases, attrs):
         n = name
