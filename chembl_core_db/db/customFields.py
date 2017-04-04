@@ -17,7 +17,8 @@ from django.core import exceptions
 from django.utils.datastructures import DictWrapper
 from django.utils import six
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 def _adjust_keywords(kwds):
     required = kwds.get('required', False)
@@ -29,14 +30,16 @@ def _adjust_keywords(kwds):
         kwds['choices'] = [(a, a) for a in kwds['choices']]
     return kwds
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class Blob(str):
     pass
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
-class BlobField(six.with_metaclass(models.SubfieldBase, models.TextField)):
+
+class BlobField(models.TextField):
     description = "Stores raw binary data"
 
     def __init__(self, *args, **kwds):
@@ -84,7 +87,8 @@ class BlobField(six.with_metaclass(models.SubfieldBase, models.TextField)):
                 return Blob(value)
         return Blob(value)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblTextField(models.TextField):
     empty_strings_allowed = False
@@ -94,7 +98,8 @@ class ChemblTextField(models.TextField):
             return 'CLOB'
         return super(ChemblTextField, self).db_type(connection)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblCharField(models.CharField):
     empty_strings_allowed = False
@@ -103,7 +108,6 @@ class ChemblCharField(models.CharField):
         self.novalidate = kwargs.pop('novalidate', False)
         self.novalidate_default = kwargs.pop('novalidate_default', False)
         super(ChemblCharField, self).__init__(*args, **kwargs)
-
 
     def db_type(self, connection):
 
@@ -121,7 +125,7 @@ class ChemblCharField(models.CharField):
             if self.choices and not self.novalidate:
                 choices = ', '.join(map(lambda x: "'%s'" % x[0].replace("'", "''"), self.choices))
                 type += ' CHECK (%(column)s IN (' + choices + ')) '
-            return (type % data)
+            return type % data
 
         if connection.vendor == 'mysql':
             if self.max_length > 767:
@@ -129,12 +133,12 @@ class ChemblCharField(models.CharField):
                 self._unique = False
             type = 'varchar(%(max_length)s)'
             type += default
-            return (type % data)
+            return type % data
 
         if connection.vendor == 'sqlite':
             type = 'varchar(%(max_length)s)'
             type += default
-            return (type % data)
+            return type % data
 
         if connection.vendor == 'oracle':
             type = 'VARCHAR2(%(max_length)s BYTE)'
@@ -142,10 +146,11 @@ class ChemblCharField(models.CharField):
             if self.choices and not self.novalidate:
                 choices = ', '.join(map(lambda x: "'%s'" % x[0].replace("'", "''"), self.choices))
                 type += ' CHECK (%(qn_column)s IN (' + choices + ')) '
-            return (type % data)
+            return type % data
         return super(ChemblCharField, self).db_type(connection)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblDateField(models.DateField):
 
@@ -168,7 +173,8 @@ class ChemblDateField(models.DateField):
             return type
         return super(ChemblDateField, self).db_type(connection)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblNoLimitDecimalField(models.DecimalField):
 
@@ -193,7 +199,8 @@ class ChemblNoLimitDecimalField(models.DecimalField):
             return self.format_number(value)
         return value
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblPositiveDecimalField(models.DecimalField):
 
@@ -201,16 +208,17 @@ class ChemblPositiveDecimalField(models.DecimalField):
         if connection.vendor == 'oracle':
             data = DictWrapper(self.__dict__, connection.ops.quote_name, "qn_")
             type = 'NUMBER(%(max_digits)s, %(decimal_places)s) CHECK (%(qn_column)s >= 0)'
-            return (type % data)
+            return type % data
 
         if connection.vendor == 'postgresql':
             data = DictWrapper(self.__dict__, connection.ops.quote_name, "qn_")
-            type =  'numeric(%(max_digits)s, %(decimal_places)s) CHECK ("%(column)s" >= 0)'
-            return (type % data)
+            type = 'numeric(%(max_digits)s, %(decimal_places)s) CHECK ("%(column)s" >= 0)'
+            return type % data
 
         return super(ChemblPositiveDecimalField, self).db_type(connection)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblIntegerField(models.IntegerField):
 
@@ -229,12 +237,12 @@ class ChemblIntegerField(models.IntegerField):
 
         if connection.vendor == 'oracle':
             data = DictWrapper(self.__dict__, connection.ops.quote_name, "qn_")
-            type = 'NUMBER(%s,0)' % (self.length)
+            type = 'NUMBER(%s,0)' % self.length
             type += default
             if self.choices:
                 choices = ', '.join(map(lambda x: str(x[0]), self.choices))
                 type += ' CHECK (%(qn_column)s IN (' + choices + ')) '
-            return (type % data)
+            return type % data
 
         if connection.vendor == 'postgresql':
             data = DictWrapper(self.__dict__, connection.ops.quote_name, "qn_")
@@ -242,15 +250,15 @@ class ChemblIntegerField(models.IntegerField):
             if self.length <= 4:
                 type = 'smallint'
             if self.length > 9:
-                type =  'bigint'
+                type = 'bigint'
             type += default
             if self.choices:
                 choices = ', '.join(map(lambda x: str(x[0]), self.choices))
                 type += ' CHECK (%(column)s IN (' + choices + ')) '
-            return (type % data)
+            return type % data
 
         if connection.vendor == 'mysql':
-            type = 'int(%s)' % (self.length)
+            type = 'int(%s)' % self.length
             return type + default
 
         if connection.vendor == 'sqlite':
@@ -258,12 +266,13 @@ class ChemblIntegerField(models.IntegerField):
             if self.length <= 4:
                 type = 'smallint'
             if self.length > 9:
-                type =  'bigint'
+                type = 'bigint'
             return type + default
 
         return super(ChemblIntegerField, self).db_type(connection)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblNullBooleanField(models.IntegerField):
 
@@ -279,13 +288,13 @@ class ChemblNullBooleanField(models.IntegerField):
             type = 'NUMBER(1,0)'
             type += default
             type += ' CHECK (%(qn_column)s IN (0,1,-1)) '
-            return (type % data)
+            return type % data
         if connection.vendor == 'postgresql':
             data = DictWrapper(self.__dict__, connection.ops.quote_name, "qn_")
             type = 'smallint'
             type += default
             type += ' CHECK ("%(column)s" in (0,1,-1))'
-            return (type % data)
+            return type % data
         if connection.vendor == 'mysql':
             type = 'int(1)'
             type += default
@@ -296,7 +305,8 @@ class ChemblNullBooleanField(models.IntegerField):
             return type
         return super(ChemblNullBooleanField, self).db_type(connection)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblNullableBooleanField(models.NullBooleanField):
 
@@ -323,14 +333,14 @@ class ChemblNullableBooleanField(models.NullBooleanField):
             if self.default != NOT_PROVIDED:
                 type += (' DEFAULT %s ' % str(int(self.default)))
             type += ' CHECK ((%(qn_column)s IN (0,1)) OR (%(qn_column)s IS NULL)) '
-            return (type % data)
+            return type % data
         if connection.vendor == 'postgresql':
             data = DictWrapper(self.__dict__, connection.ops.quote_name, "qn_")
             type = 'smallint'
             if self.default != NOT_PROVIDED:
                 type += (' DEFAULT %s ' % str(int(self.default)))
             type += ' CHECK ((%(column)s IN (0,1)) OR (%(column)s IS NULL)) '
-            return (type % data)
+            return type % data
         if connection.vendor == 'mysql':
             type = 'bool'
             if self.default != NOT_PROVIDED:
@@ -343,7 +353,8 @@ class ChemblNullableBooleanField(models.NullBooleanField):
             return type
         return super(ChemblNullableBooleanField, self).db_type(connection)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblBooleanField(models.BooleanField):
 
@@ -364,14 +375,14 @@ class ChemblBooleanField(models.BooleanField):
             if self.default != NOT_PROVIDED:
                 type += (' DEFAULT %s ' % str(int(self.default)))
             type += ' CHECK (%(qn_column)s IN (0,1)) '
-            return (type % data)
+            return type % data
         if connection.vendor == 'postgresql':
             data = DictWrapper(self.__dict__, connection.ops.quote_name, "qn_")
             type = 'smallint'
             if self.default != NOT_PROVIDED:
                 type += (' DEFAULT %s ' % str(int(self.default)))
             type += ' CHECK (%(column)s IN (0,1)) '
-            return (type % data)
+            return type % data
         if connection.vendor == 'mysql':
             type = 'bool'
             if self.default != NOT_PROVIDED:
@@ -384,7 +395,8 @@ class ChemblBooleanField(models.BooleanField):
             return type
         return super(ChemblBooleanField, self).db_type(connection)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblPositiveIntegerField(models.IntegerField):
 
@@ -410,28 +422,28 @@ class ChemblPositiveIntegerField(models.IntegerField):
 
         if connection.vendor == 'oracle':
             data = DictWrapper(self.__dict__, connection.ops.quote_name, "qn_")
-            type = 'NUMBER(%s,0)' % (self.length)
+            type = 'NUMBER(%s,0)' % self.length
             type += default
             if self.choices:
                 choices = ' AND %(qn_column)s IN ('+ ', '.join(map(lambda x: str(x[0]), self.choices)) + ' ) '
             type += ' CHECK (%(qn_column)s >= 0' + choices + ') '
-            return (type % data)
+            return type % data
 
         if connection.vendor == 'postgresql':
             data = DictWrapper(self.__dict__, connection.ops.quote_name, "qn_")
             type = 'integer'
             if self.length <= 4:
-                type =  'smallint'
+                type = 'smallint'
             if self.length > 9:
                 type = 'bigint'
             type += default
             if self.choices:
                 choices = ' AND %(column)s IN ('+ ', '.join(map(lambda x: str(x[0]), self.choices)) + ' ) '
             type += ' CHECK (%(column)s >= 0' + choices + ') '
-            return (type % data)
+            return type % data
 
         if connection.vendor == 'mysql':
-            type =  'int(%s) UNSIGNED' % (self.length)
+            type = 'int(%s) UNSIGNED' % self.length
             type += default
             return type
 
@@ -447,7 +459,8 @@ class ChemblPositiveIntegerField(models.IntegerField):
 
         return super(ChemblPositiveIntegerField, self).db_type(connection)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class ChemblAutoField(Field):
     description = _("Integer")
@@ -469,7 +482,7 @@ class ChemblAutoField(Field):
 
     def db_type(self, connection):
         if connection.vendor == 'oracle':
-            return 'NUMBER(%s,0)' % (self.length)
+            return 'NUMBER(%s,0)' % self.length
         if connection.vendor == 'postgresql':
             if self.length <= 4:
                 return 'smallint'
@@ -477,13 +490,13 @@ class ChemblAutoField(Field):
                 return 'integer'
             return 'bigint'
         if connection.vendor == 'mysql':
-            return 'int(%s)' % (self.length)
+            return 'int(%s)' % self.length
         if connection.vendor == 'sqlite':
             type = 'integer'
             if self.length <= 4:
                 type = 'smallint'
             if self.length > 9:
-                type =  'bigint'
+                type = 'bigint'
             return type
         return super(ChemblAutoField, self).db_type(connection)
 
@@ -504,7 +517,7 @@ class ChemblAutoField(Field):
             return None
         return int(value)
 
-    def contribute_to_class(self, cls, name):
+    def contribute_to_class(self, cls, name, private_only=False, virtual_only=NOT_PROVIDED):
         assert not cls._meta.has_auto_field,\
         "A model can't have more than one AutoField."
         super(ChemblAutoField, self).contribute_to_class(cls, name)
@@ -514,4 +527,4 @@ class ChemblAutoField(Field):
     def formfield(self, **kwargs):
         return None
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------

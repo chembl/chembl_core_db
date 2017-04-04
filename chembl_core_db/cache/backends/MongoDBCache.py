@@ -8,6 +8,7 @@ except ImportError:
     import pickle
 import base64
 import pymongo
+from bson import Binary
 from datetime import datetime, timedelta
 from django.core.cache.backends.base import BaseCache
 import zlib
@@ -17,11 +18,12 @@ try:
 except ImportError:
     from urllib.parse import urlencode
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
 MAX_SIZE = 16000000
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
 
 class MongoDBCache(BaseCache):
 
@@ -39,27 +41,33 @@ class MongoDBCache(BaseCache):
         self._server_selection_timeout_ms = options.get('SERVER_SELECTION_TIMEOUT_MS', 30000)
         self._socket_timeout_ms = options.get('SOCKET_TIMEOUT_MS', None)
         self._connect_timeout_ms = options.get('CONNECT_TIMEOUT_MS', 20000)
+        self._compression = options.get('COMPRESSION', True)
         self.compression_level = options.get('COMPRESSION_LEVEL', 0)
         self._tag_sets = options.get('TAG_SETS', None)
         self._read_preference = options.get("READ_PREFERENCE")
         self._collection = location
         self.log = logging.getLogger(__name__)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def add(self, key, value, timeout=None, version=None):
         key = self.make_key(key, version)
         self.validate_key(key)
         self._base_set('add', key, value, timeout)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def set(self, key, value, timeout=None, version=None):
         key = self.make_key(key, version)
         self.validate_key(key)
         self._base_set('set', key, value, timeout)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+
+    def validate_key(self, key):
+        return
+
+# ----------------------------------------------------------------------------------------------------------------------
 
     def _base_set(self, mode, key, value, timeout=None):
         no_safe = False
@@ -87,7 +95,7 @@ class MongoDBCache(BaseCache):
                 return
             else:
                 self._delete([key] + data.get('chunks', []))
-        if document_size <= MAX_SIZE:
+        if not self._compression or document_size <= MAX_SIZE:
             if no_safe:
                 coll.insert({'_id': key, 'data': encoded, 'expires': expires})
             else:
@@ -107,17 +115,22 @@ class MongoDBCache(BaseCache):
             else:
                 coll.insert({'_id': key, 'chunks': chunks, 'expires': expires}, safe=True)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def _decode(self, data):
-        return pickle.loads(zlib.decompress(base64.decodestring(data)))
+        if self._compression:
+            return pickle.loads(zlib.decompress(base64.decodestring(data)))
+        return pickle.loads(data)
 
-#-----------------------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------------------
 
     def _encode(self, data):
-        return base64.encodestring(zlib.compress(pickle.dumps(data, pickle.HIGHEST_PROTOCOL), self.compression_level))
+        if self._compression:
+            return base64.encodestring(zlib.compress(pickle.dumps(data, pickle.HIGHEST_PROTOCOL), self.compression_level))
+        return Binary(pickle.dumps(data, pickle.HIGHEST_PROTOCOL))
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def get(self, key, default=None, version=None):
         coll = self._get_collection()
@@ -141,7 +154,7 @@ class MongoDBCache(BaseCache):
                 return default
         return self._decode(raw)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def get_many(self, keys, version=None):
         coll = self._get_collection()
@@ -169,7 +182,7 @@ class MongoDBCache(BaseCache):
             coll.remove({'_id': {'$in': to_remove}})
         return out
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def delete(self, key, version=None):
         key = self.make_key(key, version)
@@ -179,13 +192,13 @@ class MongoDBCache(BaseCache):
         if data:
             self._delete([key] + data.get('chunks', []))
 
-#-------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def _delete(self, ids_to_remove):
         coll = self._get_collection()
         coll.remove({'_id': {'$in':ids_to_remove}})
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def has_key(self, key, version=None):
         coll = self._get_collection()
@@ -194,13 +207,13 @@ class MongoDBCache(BaseCache):
         data = coll.find_one({'_id': key, 'expires': {'$gt': datetime.utcnow()}})
         return data is not None
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def clear(self):
         coll = self._get_collection()
         coll.remove({})
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def _cull(self):
         if self._cull_frequency == 0:
@@ -208,16 +221,16 @@ class MongoDBCache(BaseCache):
             return
         coll = self._get_collection()
         coll.remove({'expires': {'$lte': datetime.utcnow()}})
-        #TODO: implement more agressive cull
+        # TODO: implement more agressive cull
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def _get_collection(self):
         if not getattr(self, '_coll', None):
             self._initialize_collection()
         return self._coll
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
 
     def _initialize_collection(self):
         try:
@@ -244,10 +257,15 @@ class MongoDBCache(BaseCache):
         if self._user and self._password:
             self._db.authenticate(self._user, self._password)
         if pymongo.version_tuple[0] < 3:
-            self._coll= self._db[self._collection]
+            self._coll = self._db[self._collection]
         else:
             self._coll = self._db.get_collection(self._collection)
             if not self._coll:
-                self._coll= self._db.create_collection(self._collection, storageEngine={'wiredTiger':{'configString':'block_compressor=none'}})
+                if self._compression:
+                    self._coll = self._db.create_collection(self._collection,
+                                                            storageEngine={'wiredTiger':
+                                                                            {'configString': 'block_compressor=none'}})
+                else:
+                    self._coll = self._db.create_collection(self._collection)
 
-#-----------------------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------

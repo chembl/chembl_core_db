@@ -14,7 +14,7 @@ except ImportError:
 
 setup(
     name='chembl-core-db',
-    version='0.8.4',
+    version='0.9.13',
     author='Michal Nowotka',
     author_email='mnowotka@ebi.ac.uk',
     description='Core ChEMBL python library',
@@ -29,7 +29,7 @@ setup(
               'chembl_core_db.db.models',
               'chembl_core_db.testing'],
     long_description=open('README.rst').read(),
-    install_requires=['Django==1.5.5'],
+    install_requires=['Django==1.10.6'],
     include_package_data=False,
     classifiers=['Development Status :: 4 - Beta',
                  'Environment :: Web Environment',
