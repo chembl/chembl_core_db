@@ -152,6 +152,12 @@ class ChemblCharField(models.CharField):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
+class ChemblIndexedCharField(ChemblCharField):
+    pass
+
+# ----------------------------------------------------------------------------------------------------------------------
+
+
 class ChemblDateField(models.DateField):
 
     def db_type(self, connection):

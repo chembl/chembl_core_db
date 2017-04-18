@@ -41,6 +41,7 @@ class MongoDBCache(BaseCache):
         self._server_selection_timeout_ms = options.get('SERVER_SELECTION_TIMEOUT_MS', 30000)
         self._socket_timeout_ms = options.get('SOCKET_TIMEOUT_MS', None)
         self._connect_timeout_ms = options.get('CONNECT_TIMEOUT_MS', 20000)
+        self._max_time_ms = options.get('MAX_TIME_MS', 2000)
         self._compression = options.get('COMPRESSION', True)
         self.compression_level = options.get('COMPRESSION_LEVEL', 0)
         self._tag_sets = options.get('TAG_SETS', None)
@@ -70,50 +71,24 @@ class MongoDBCache(BaseCache):
 # ----------------------------------------------------------------------------------------------------------------------
 
     def _base_set(self, mode, key, value, timeout=None):
-        no_safe = False
-        if pymongo.version_tuple[0] >= 3:
-            no_safe = True
-        if not timeout:
-            timeout = self.default_timeout
-        now = datetime.utcnow()
-        expires = now + timedelta(seconds=timeout)
         coll = self._get_collection()
         encoded = self._encode(value)
         document_size = len(encoded)
-        count = coll.count()
-        if count > self._max_entries:
-            self._cull()
-        data = coll.find_one({'_id': key})
-        if data and (mode == 'set' or
-                (mode == 'add' and data['expires'] > now)):
-            raw = data.get('data')
-            if raw and raw == encoded:
-                if no_safe:
-                    coll.update({'_id': data['_id']}, {'$set': {'expires': expires}})
-                else:
-                    coll.update({'_id': data['_id']}, {'$set': {'expires': expires}}, safe=True)
-                return
-            else:
-                self._delete([key] + data.get('chunks', []))
+        data = coll.find_one({'_id': key}, max_time_ms=self._max_time_ms)
+        if data and (mode == 'set' or mode == 'add'):
+            pass
         if not self._compression or document_size <= MAX_SIZE:
-            if no_safe:
-                coll.insert({'_id': key, 'data': encoded, 'expires': expires})
-            else:
-                coll.insert({'_id': key, 'data': encoded, 'expires': expires}, safe=True)
+            coll.insert_one({'_id': key, 'data': encoded})
         else:
+            chunk_keys = []
             chunks = []
-            for i in xrange(0, document_size, MAX_SIZE):
-                chunk = encoded[i:i+MAX_SIZE]
+            for i in range(0, document_size, MAX_SIZE):
+                chunk = encoded[i:i + MAX_SIZE]
                 aux_key = self.make_key(chunk)
-                if no_safe:
-                    coll.insert({'_id': aux_key, 'data': chunk})
-                else:
-                    coll.insert({'_id': aux_key, 'data': chunk}, safe=True)
-                chunks.append(aux_key)
-            if no_safe:
-                coll.insert({'_id': key, 'chunks': chunks, 'expires': expires})
-            else:
-                coll.insert({'_id': key, 'chunks': chunks, 'expires': expires}, safe=True)
+                chunk.append({'_id': aux_key, 'data': chunk})
+                chunk_keys.append(aux_key)
+            coll.insert_many(chunks)
+            coll.insert_one({'_id': key, 'chunks': chunk_keys})
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -136,12 +111,8 @@ class MongoDBCache(BaseCache):
         coll = self._get_collection()
         key = self.make_key(key, version)
         self.validate_key(key)
-        now = datetime.utcnow()
-        data = coll.find_one({'_id': key})
+        data = coll.find_one({'_id': key}, max_time_ms=self._max_time_ms)
         if not data:
-            return default
-        if data['expires'] < now:
-            coll.remove(data['_id'])
             return default
         raw = data.get('data')
         if not raw:
@@ -149,7 +120,7 @@ class MongoDBCache(BaseCache):
             if chunks:
                 raw = ''
                 for chunk in chunks:
-                    raw += coll.find_one({'_id': chunk})['data']
+                    raw += coll.find_one({'_id': chunk}, max_time_ms=self._max_time_ms)['data']
             else:
                 return default
         return self._decode(raw)
@@ -158,45 +129,27 @@ class MongoDBCache(BaseCache):
 
     def get_many(self, keys, version=None):
         coll = self._get_collection()
-        now = datetime.utcnow()
         out = {}
         parsed_keys = {}
-        to_remove = []
         for key in keys:
             pkey = self.make_key(key, version)
             self.validate_key(pkey)
             parsed_keys[pkey] = key
-        data = coll.find({'_id': {'$in': parsed_keys.keys()}})
+        data = coll.find({'_id': {'$in': parsed_keys.keys()}}).max_time_ms(self._max_time_ms)
         for result in data:
-            if result['expires'] < now:
-                to_remove.append(result['_id'])
-            else:
-                raw = result.get('data')
-                chunks = result.get('chunks')
-                if chunks:
-                    raw = ''
-                    for chunk in chunks:
-                        raw += coll.find_one({'_id': chunk})['data']
-                out[parsed_keys[result['_id']]] = self._decode(raw)
-        if to_remove:
-            coll.remove({'_id': {'$in': to_remove}})
+            raw = result.get('data')
+            chunks = result.get('chunks')
+            if chunks:
+                raw = ''
+                for chunk in chunks:
+                    raw += coll.find_one({'_id': chunk}, max_time_ms=self._max_time_ms)['data']
+            out[parsed_keys[result['_id']]] = self._decode(raw)
         return out
 
 # ----------------------------------------------------------------------------------------------------------------------
 
     def delete(self, key, version=None):
-        key = self.make_key(key, version)
-        self.validate_key(key)
-        coll = self._get_collection()
-        data = coll.find_one({'_id': key})
-        if data:
-            self._delete([key] + data.get('chunks', []))
-
-# ----------------------------------------------------------------------------------------------------------------------
-
-    def _delete(self, ids_to_remove):
-        coll = self._get_collection()
-        coll.remove({'_id': {'$in':ids_to_remove}})
+        pass
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -204,24 +157,18 @@ class MongoDBCache(BaseCache):
         coll = self._get_collection()
         key = self.make_key(key, version)
         self.validate_key(key)
-        data = coll.find_one({'_id': key, 'expires': {'$gt': datetime.utcnow()}})
+        data = coll.find_one({'_id': key}, max_time_ms=self._max_time_ms)
         return data is not None
 
 # ----------------------------------------------------------------------------------------------------------------------
 
     def clear(self):
-        coll = self._get_collection()
-        coll.remove({})
+        pass
 
 # ----------------------------------------------------------------------------------------------------------------------
 
     def _cull(self):
-        if self._cull_frequency == 0:
-            self.clear()
-            return
-        coll = self._get_collection()
-        coll.remove({'expires': {'$lte': datetime.utcnow()}})
-        # TODO: implement more agressive cull
+        pass
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -239,19 +186,9 @@ class MongoDBCache(BaseCache):
         except ImportError:
             pass
 
-        if pymongo.version_tuple[0] < 3:
-
-            if self._rsname:
-                self.connection = pymongo.MongoReplicaSetClient(self._rshosts, replicaSet=self._rsname,
-                    read_preference=self._read_preference, socketTimeoutMS=self._socket_timeout_ms,
-                    connectTimeoutMS=self._connect_timeout_ms, tag_sets=self._tag_sets)
-            else:
-                self.connection = pymongo.Connection(self._host, self._port)
-
-        else:
-            self.connection = pymongo.MongoClient(connect=False, host=self._host, replicaset=self._rsname,
-                sockettimeoutms=self._socket_timeout_ms, connecttimeoutms=self._connect_timeout_ms,
-                serverSelectionTimeoutMS=self._server_selection_timeout_ms,read_preference=self._read_preference)
+        self.connection = pymongo.MongoClient(connect=False, host=self._host, replicaset=self._rsname,
+            sockettimeoutms=self._socket_timeout_ms, connecttimeoutms=self._connect_timeout_ms,
+            serverSelectionTimeoutMS=self._server_selection_timeout_ms,read_preference=self._read_preference)
 
         self._db = self.connection[self._database]
         if self._user and self._password:

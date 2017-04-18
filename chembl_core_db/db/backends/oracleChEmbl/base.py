@@ -476,8 +476,8 @@ class FormatStylePlaceholderCursor(object):
     def execute(self, query, params=None):
         query, params = self._fix_for_params(query, params)
         self._guess_input_sizes([params])
-        print query
-        print self._param_generator(params)
+        #print query
+        #print self._param_generator(params)
         try:
             start_time = time.clock()
             ret = self.cursor.execute(query, self._param_generator(params))
