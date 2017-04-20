@@ -180,17 +180,16 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     Database = Database
     SchemaEditorClass = DatabaseSchemaEditor
 
+    client_class = DatabaseClient
+    creation_class = DatabaseCreation
+    features_class = DatabaseFeatures
+    introspection_class = DatabaseIntrospection
+    ops_class = DatabaseOperations
+
     def __init__(self, *args, **kwargs):
         super(DatabaseWrapper, self).__init__(*args, **kwargs)
-
-        self.features = DatabaseFeatures(self)
         use_returning_into = self.settings_dict["OPTIONS"].get('use_returning_into', True)
         self.features.can_return_id_from_insert = use_returning_into
-        self.ops = DatabaseOperations(self)
-        self.client = DatabaseClient(self)
-        self.creation = DatabaseCreation(self)
-        self.introspection = DatabaseIntrospection(self)
-        self.validation = BaseDatabaseValidation(self)
 
     def _connect_string(self):
         settings_dict = self.settings_dict
@@ -260,7 +259,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         if not self.get_autocommit():
             self.commit()
 
-    def create_cursor(self):
+    def create_cursor(self, name=None):
         return FormatStylePlaceholderCursor(self.connection)
 
     def _commit(self):
