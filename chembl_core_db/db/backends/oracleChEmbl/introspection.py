@@ -168,6 +168,8 @@ AND (data_scale = 0 OR data_scale is null);""", [table_name])
                     ch = choice.strip()
                     if ch.startswith("'"):
                         ch = str(ch[1:-1].upper())
+                    elif ch == 'null':
+                        ch = None
                     else:
                         ch = int(ch)
                     choices.append((ch, str(ch)))
