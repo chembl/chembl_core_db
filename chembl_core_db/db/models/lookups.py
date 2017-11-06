@@ -42,7 +42,7 @@ class OracleIContains(IContains):
         lhs, lhs_params = self.process_lhs(compiler, connection)
         rhs, rhs_params = self.process_rhs(compiler, connection)
         params = lhs_params + rhs_params
-        return 'CONTAINS(%s, %s, 1) > 0' % (lhs, rhs), params
+        return 'CONTAINS(%s, %s) > 0' % (lhs, rhs), params
 
 
 ChemblIndexedCharField.register_lookup(OracleIContains)
