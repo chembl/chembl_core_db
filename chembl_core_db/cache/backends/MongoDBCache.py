@@ -9,6 +9,7 @@ except ImportError:
 import base64
 import pymongo
 from bson import Binary
+import re
 from datetime import datetime, timedelta
 from django.core.cache.backends.base import BaseCache
 import zlib
@@ -18,10 +19,15 @@ try:
 except ImportError:
     from urllib.parse import urlencode
 
+
 # ----------------------------------------------------------------------------------------------------------------------
 
 MAX_SIZE = 16000000
 
+
+def camel_case_to_snake_case(name):
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 # ----------------------------------------------------------------------------------------------------------------------
 
 
@@ -46,6 +52,7 @@ class MongoDBCache(BaseCache):
         self.compression_level = options.get('COMPRESSION_LEVEL', 0)
         self._tag_sets = options.get('TAG_SETS', None)
         self._read_preference = options.get("READ_PREFERENCE")
+        self._collection_indexes = options.get('INDEXES', None)
         self._collection = location
         self.log = logging.getLogger(__name__)
 
@@ -71,24 +78,41 @@ class MongoDBCache(BaseCache):
 # ----------------------------------------------------------------------------------------------------------------------
 
     def _base_set(self, mode, key, value, timeout=None):
+        extra_props = {}
+        if isinstance(value, dict):
+            for k, v in value.iteritems():
+                if isinstance(v, str) or isinstance(v, int) or isinstance(v, float) \
+                        or isinstance(v, bool):
+                    extra_props[k] = v
+        elif isinstance(value, object):
+            extra_props['resource_name'] = camel_case_to_snake_case(type(value).__name__)
+
+        extra_props.pop('_id', None)
+        extra_props.pop('data', None)
+        extra_props.pop('chunks', None)
+
         coll = self._get_collection()
         encoded = self._encode(value)
         document_size = len(encoded)
         data = coll.find_one({'_id': key}, max_time_ms=self._max_time_ms)
+
         if data and (mode == 'set' or mode == 'add'):
             pass
         if not self._compression or document_size <= MAX_SIZE:
-            coll.insert_one({'_id': key, 'data': encoded})
+            extra_props.update({'_id': key, 'data': encoded})
+            coll.insert_one(extra_props)
         else:
             chunk_keys = []
             chunks = []
             for i in range(0, document_size, MAX_SIZE):
                 chunk = encoded[i:i + MAX_SIZE]
                 aux_key = self.make_key(chunk)
-                chunk.append({'_id': aux_key, 'data': chunk})
+                extra_props.update({'_id': aux_key, 'data': chunk})
+                chunk.append(extra_props)
                 chunk_keys.append(aux_key)
             coll.insert_many(chunks)
-            coll.insert_one({'_id': key, 'chunks': chunk_keys})
+            extra_props.update({'_id': key, 'chunks': chunk_keys})
+            coll.insert_one(extra_props)
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -204,5 +228,18 @@ class MongoDBCache(BaseCache):
                                                                             {'configString': 'block_compressor=none'}})
                 else:
                     self._coll = self._db.create_collection(self._collection)
+
+        # create indexes if they do not exist
+        if isinstance(self._collection_indexes, list) and len(self._collection_indexes):
+            indexes_info = {}
+            try:
+                indexes_info = self._coll.index_information()
+            except:
+                pass
+            for index_desc in self._collection_indexes:
+                index_name = index_desc['NAME']
+                index_description = index_desc['INDEX_DESCRIPTION']
+                if index_name not in indexes_info:
+                    self._coll.create_index(index_description)
 
 # ----------------------------------------------------------------------------------------------------------------------
