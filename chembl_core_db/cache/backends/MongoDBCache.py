@@ -2,6 +2,7 @@
 # Author Karol Sikora <karol.sikora@laboratorium.ee>, (c) 2012
 # Author Michal Nowotka <mmmnow@gmail.com>, (c) 2013-2014
 
+import traceback
 try:
     import cPickle as pickle
 except ImportError:
@@ -40,6 +41,7 @@ class MongoDBCache(BaseCache):
         self._host = options.get('HOST', 'localhost')
         self._port = options.get('PORT', 27017)
         self._database = options.get('DATABASE', 'django_cache')
+        self._auth_db = options.get('AUTH_DATABASE', self._database)
         self._rshosts = options.get('RSHOSTS')
         self._rsname = options.get('RSNAME')
         self._user = options.get('USER', None)
@@ -212,11 +214,18 @@ class MongoDBCache(BaseCache):
 
         self.connection = pymongo.MongoClient(connect=False, host=self._host, replicaset=self._rsname,
             sockettimeoutms=self._socket_timeout_ms, connecttimeoutms=self._connect_timeout_ms,
-            serverSelectionTimeoutMS=self._server_selection_timeout_ms,read_preference=self._read_preference)
+            serverSelectionTimeoutMS=self._server_selection_timeout_ms, read_preference=self._read_preference)
 
         self._db = self.connection[self._database]
         if self._user and self._password:
-            self._db.authenticate(self._user, self._password)
+            try:
+                self._db.authenticate(self._user, self._password, source=self._auth_db)
+            except Exception as ex1:
+                traceback.print_exc()
+                self.log.error(
+                    'It is not possible to authenticate user {0} in auth db {1}'.format(self._user, self._auth_db)
+                )
+                raise ex1
         if pymongo.version_tuple[0] < 3:
             self._coll = self._db[self._collection]
         else:
