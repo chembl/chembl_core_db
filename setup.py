@@ -29,7 +29,7 @@ setup(
               'chembl_core_db.db.models',
               'chembl_core_db.testing'],
     long_description=open('README.rst').read(),
-    install_requires=['Django==1.11'],
+    install_requires=['Django==1.11.23'],
     include_package_data=False,
     classifiers=['Development Status :: 4 - Beta',
                  'Environment :: Web Environment',
